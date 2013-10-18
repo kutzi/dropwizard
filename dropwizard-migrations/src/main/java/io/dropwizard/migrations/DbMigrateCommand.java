@@ -9,7 +9,10 @@ import net.sourceforge.argparse4j.impl.Arguments;
 import net.sourceforge.argparse4j.inf.Namespace;
 import net.sourceforge.argparse4j.inf.Subparser;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.OutputStreamWriter;
+import java.io.Writer;
 import java.util.List;
 
 public class DbMigrateCommand<T extends Configuration> extends AbstractLiquibaseCommand<T> {
@@ -26,6 +29,11 @@ public class DbMigrateCommand<T extends Configuration> extends AbstractLiquibase
                  .dest("dry-run")
                  .setDefault(Boolean.FALSE)
                  .help("output the DDL to stdout, don't run it");
+        
+        subparser.addArgument("-o", "--output-file")
+                 .type(Arguments.fileType().verifyCanWrite())
+                 .dest("output")
+                 .help("output the DDL to a file, don't run it");
 
         subparser.addArgument("-c", "--count")
                  .type(Integer.class)
@@ -44,15 +52,28 @@ public class DbMigrateCommand<T extends Configuration> extends AbstractLiquibase
         final String context = getContext(namespace);
         final Integer count = namespace.getInt("count");
         final Boolean dryRun = namespace.getBoolean("dry-run");
-        if (count != null) {
+        final String output = namespace.getString("output");
+        final File outputFile = output != null ? new File(namespace.getString("output").trim()) : null;
+        
+        boolean dumpToStream = dryRun || (outputFile != null);
+        Writer w = null;
+        if (dumpToStream) {
             if (dryRun) {
-                liquibase.update(count, context, new OutputStreamWriter(System.out, Charsets.UTF_8));
+                w = new OutputStreamWriter(System.out, Charsets.UTF_8);
+            } else {
+                w = new OutputStreamWriter(new FileOutputStream(outputFile), Charsets.UTF_8);
+            }
+        }
+        
+        if (count != null) {
+            if (dumpToStream) {
+                liquibase.update(count, context, w);
             } else {
                 liquibase.update(count, context);
             }
         } else {
-            if (dryRun) {
-                liquibase.update(context, new OutputStreamWriter(System.out, Charsets.UTF_8));
+            if (dumpToStream) {
+                liquibase.update(context, w);
             } else {
                 liquibase.update(context);
             }
